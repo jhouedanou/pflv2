@@ -1,2 +1,3 @@
-// Réexporter le storage depuis supabaseStorage pour compatibilité
-export { storage } from './supabaseStorage';
+// Réexporter le storage depuis storageSync pour compatibilité
+// storageSync est synchrone et synchronise avec Supabase en arrière-plan
+export { storage } from './storageSync';
