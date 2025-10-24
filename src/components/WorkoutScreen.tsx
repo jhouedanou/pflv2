@@ -27,8 +27,19 @@ export function WorkoutScreen({ onBack, day, mode, workout, onComplete }: Workou
   const [totalCalories, setTotalCalories] = useState(0);
   const [soundEnabled, setSoundEnabled] = useState(true);
 
+  // Mode Auto states
+  const [isAutoMode, setIsAutoMode] = useState(false);
+  const [isAutoPaused, setIsAutoPaused] = useState(false);
+  const [exerciseTimeLeft, setExerciseTimeLeft] = useState(0);
+  const [autoExerciseDuration, setAutoExerciseDuration] = useState(0);
+
   const restDurations = { normal: 15, auto: 20, 'fat-burner': 10 };
   const restDuration = restDurations[mode];
+
+  // Calculate auto exercise duration based on reps (2-3 seconds per rep)
+  const calculateExerciseDuration = (reps: number) => {
+    return reps * 2.5; // 2.5 seconds per rep
+  };
 
   useEffect(() => {
     if (isResting && restTimeLeft > 0) {
@@ -53,6 +64,38 @@ export function WorkoutScreen({ onBack, day, mode, workout, onComplete }: Workou
       }
     }
   }, [isResting, restTimeLeft, mode, soundEnabled]);
+
+  // Auto mode timer for exercises
+  useEffect(() => {
+    if (isAutoMode && !isAutoPaused && !isResting && exerciseTimeLeft > 0) {
+      const timer = setTimeout(() => {
+        setExerciseTimeLeft(exerciseTimeLeft - 1);
+
+        // Play sound for last 3 seconds
+        if (soundEnabled && exerciseTimeLeft <= 3 && exerciseTimeLeft > 0) {
+          audioManager.playCountdownBeep();
+        }
+
+        // Play final beep when timer ends
+        if (soundEnabled && exerciseTimeLeft === 1) {
+          setTimeout(() => audioManager.playFinalBeep(), 1000);
+        }
+      }, 1000);
+      return () => clearTimeout(timer);
+    } else if (isAutoMode && !isAutoPaused && !isResting && exerciseTimeLeft === 0 && autoExerciseDuration > 0) {
+      // Auto complete set when timer reaches 0
+      handleCompleteSet();
+    }
+  }, [isAutoMode, isAutoPaused, isResting, exerciseTimeLeft, autoExerciseDuration, soundEnabled]);
+
+  // Initialize exercise timer when starting a new exercise in auto mode
+  useEffect(() => {
+    if (isAutoMode && !isResting) {
+      const duration = calculateExerciseDuration(currentExercise.reps);
+      setAutoExerciseDuration(duration);
+      setExerciseTimeLeft(duration);
+    }
+  }, [isAutoMode, currentExerciseIndex, currentSet, isResting]);
 
   const currentExercise = workout.exercises[currentExerciseIndex];
   const progressPercent = (completedExercises.size / workout.exercises.length) * 100;
@@ -209,14 +252,29 @@ export function WorkoutScreen({ onBack, day, mode, workout, onComplete }: Workou
             </CardContent>
           </Card>
 
-          <div className="sticky bottom-6 flex justify-center">
+          <div className="sticky bottom-6 flex justify-center gap-4 px-4">
             <Button
               size="lg"
-              className="gap-3 text-lg px-12 py-6 rounded-full shadow-2xl bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 border-0"
+              className="gap-3 text-lg px-8 py-6 rounded-full shadow-2xl bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 border-0"
               onClick={() => setViewMode('step-by-step')}
             >
               <Play className="h-6 w-6 fill-current" />
               Mode Guidé
+            </Button>
+            <Button
+              size="lg"
+              variant="secondary"
+              className="gap-3 text-lg px-8 py-6 rounded-full shadow-2xl bg-gradient-to-r from-red-600 to-orange-600 hover:from-red-700 hover:to-orange-700 border-0 text-white"
+              onClick={() => {
+                setIsAutoMode(true);
+                setViewMode('step-by-step');
+                const duration = calculateExerciseDuration(workout.exercises[0].reps);
+                setAutoExerciseDuration(duration);
+                setExerciseTimeLeft(duration);
+              }}
+            >
+              <Timer className="h-6 w-6" />
+              Mode Auto
             </Button>
           </div>
         </div>
@@ -286,6 +344,47 @@ export function WorkoutScreen({ onBack, day, mode, workout, onComplete }: Workou
                 </div>
               </div>
               <CardContent className="pt-8 pb-8">
+                {/* Auto Mode Timer */}
+                {isAutoMode && (
+                  <div className="mb-6 p-6 rounded-xl bg-gradient-to-r from-red-50 to-orange-50 dark:from-red-950 dark:to-orange-950 border-2 border-red-200 dark:border-red-800">
+                    <div className="text-center">
+                      <div className="text-slate-600 dark:text-slate-400 mb-2 flex items-center justify-center gap-2">
+                        <Timer className="h-5 w-5" />
+                        Temps restant
+                      </div>
+                      <div className={`text-6xl font-bold mb-3 transition-all ${exerciseTimeLeft <= 3 ? 'scale-110 animate-pulse text-red-600' : 'text-slate-900 dark:text-white'}`}>
+                        {Math.ceil(exerciseTimeLeft)}s
+                      </div>
+                      <div className="w-full max-w-xs mx-auto bg-slate-200 dark:bg-slate-700 rounded-full h-3 mb-4">
+                        <div
+                          className="bg-gradient-to-r from-red-600 to-orange-600 h-3 rounded-full transition-all"
+                          style={{ width: `${((autoExerciseDuration - exerciseTimeLeft) / autoExerciseDuration) * 100}%` }}
+                        />
+                      </div>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setIsAutoPaused(!isAutoPaused)}
+                        className="mr-2"
+                      >
+                        {isAutoPaused ? <Play className="h-4 w-4 mr-2" /> : <Pause className="h-4 w-4 mr-2" />}
+                        {isAutoPaused ? 'Reprendre' : 'Pause'}
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          setIsAutoMode(false);
+                          setIsAutoPaused(false);
+                          setExerciseTimeLeft(0);
+                        }}
+                      >
+                        Quitter Auto
+                      </Button>
+                    </div>
+                  </div>
+                )}
+
                 <div className="text-center mb-6">
                   <div className="inline-flex items-center justify-center w-32 h-32 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 text-white mb-4">
                     <div>
